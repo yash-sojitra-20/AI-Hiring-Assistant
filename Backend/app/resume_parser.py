@@ -9,7 +9,7 @@ load_dotenv()
 # Set up Gemini API
 genai.configure(api_key=os.getenv("GEMINI_API"))
 
-model = genai.GenerativeModel("gemini-pro")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 def extract_and_score_resume(resume_text: str, requirements: List[str]) -> Dict:
   resumeMatch = 0
