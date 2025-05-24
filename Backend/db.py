@@ -1,15 +1,10 @@
 from motor.motor_asyncio import AsyncIOMotorClient
-from dotenv import load_dotenv
-import os
 
-load_dotenv()
-MONGO_URI = os.getenv("MONGO_URI")
+client = AsyncIOMotorClient("mongodb+srv://tirthbhadani4:oXVmHYziVVZLxjeF@cluster0.cyili3l.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
 
-client = AsyncIOMotorClient(MONGO_URI)
-db = client.resume_db
+db = client["resume_app"]
 
-# Collection for user resumes
-collection = db.resumes
-
-# Collection for HR job descriptions
-jd_collection = db.job_descriptions
+hr_collection = db["hr"]
+job_collection = db["job"]
+user_collection = db["user"]
+job_user_collection = db["job_user"]

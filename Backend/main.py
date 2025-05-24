@@ -1,206 +1,169 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from typing import List
 from bson import ObjectId
-from db import collection, jd_collection
-from label_extractor import extract_labels
-import pdfplumber
-from docx import Document
-from datetime import datetime
-from fastapi import Query
+from datetime import datetime, timedelta
+from db import hr_collection, job_collection, user_collection, job_user_collection
 import io
-import base64
-
+import pdfplumber
 
 app = FastAPI()
 
-# PDF reader
-def read_pdf(file_bytes) -> str:
-    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-        return "\n".join([page.extract_text() or "" for page in pdf.pages])
+# Utility: Pydantic Mongo ObjectId compatibility
+class PyObjectId(str):
+    @classmethod
+    def __get_validators__(cls):
+        yield cls.validate
+    @classmethod
+    def validate(cls, v):
+        return str(v)
 
-# DOCX reader
-def read_docx(file_bytes) -> str:
-    doc = Document(io.BytesIO(file_bytes))
-    return "\n".join([para.text for para in doc.paragraphs])
+# ------------------ MODELS ------------------
 
-# Upload resume with user_name
-@app.post("/upload-resume/")
-async def upload_resume(
-        user_name: str = Form(...),
-        interview_date: str = Form(...),  # expecting "YYYY-MM-DD"
-        interview_time: str = Form(...),  # expecting "HH:MM" 24h format
-        file: UploadFile = File(...)
-):
-    # Basic validation of date and time (optional, but recommended)
-    try:
-        interview_datetime = datetime.strptime(f"{interview_date} {interview_time}", "%Y-%m-%d %H:%M")
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid date or time format. Use YYYY-MM-DD for date and HH:MM (24h) for time.")
+class HRModel(BaseModel):
+    hr_username: str
+    hr_pass: str
 
-    file_bytes = await file.read()
+class JobModel(BaseModel):
+    job_des: List[str]
+    job_title: str
+    job_department: str
+    job_type: str  # "full day" or "half day"
+    job_applicant: int
+    posted_date: str
+    open_date: str
+    problem_statements: List[str]
+    hr_id: str
 
-    if file.content_type == "application/pdf":
-        text = read_pdf(file_bytes)
-    elif file.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-        text = read_docx(file_bytes)
-    else:
-        raise HTTPException(status_code=415, detail="Unsupported file type")
+class UserModel(BaseModel):
+    user_name: str
+    user_pass: str
 
-    labels = extract_labels(text)
+class JobUserModel(BaseModel):
+    job_id: str
+    user_id: str
+    status: int
+    resume_detail: dict
+    resume_score: int
 
-    doc = {
-        "user_name": user_name,
-        "filename": file.filename,
-        "content": text,
-        "labels": labels,
-        "file_data": file_bytes,
-        "content_type": file.content_type,
-        "interview_date": interview_date,
-        "interview_time": interview_time,
-        "interview_datetime": interview_datetime.isoformat()  # ISO formatted combined datetime
-    }
+# ------------------ HR ------------------
 
-    result = await collection.insert_one(doc)
-    return {
-        "message": "Resume uploaded",
-        "id": str(result.inserted_id),
-        "labels": labels,
-        "interview_date": interview_date,
-        "interview_time": interview_time
-    }
+@app.post("/hr/")
+async def create_hr(hr: HRModel):
+    result = await hr_collection.insert_one(hr.dict())
+    return {"message": "HR created", "id": str(result.inserted_id)}
 
-# Get all resume labels
-@app.get("/get-labels/")
-async def get_labels():
-    cursor = collection.find({})
+@app.get("/hr/")
+async def get_all_hrs():
+    cursor = hr_collection.find({})
     data = []
     async for doc in cursor:
-        data.append({
-            "id": str(doc["_id"]),
-            "user_name": doc.get("user_name", ""),
-            "filename": doc["filename"],
-            "labels": doc["labels"]
-        })
+        doc["_id"] = str(doc["_id"])
+        data.append(doc)
     return data
 
-# Download resume by ID
-@app.get("/download-resume/{resume_id}")
-async def download_resume(resume_id: str):
-    doc = await collection.find_one({"_id": ObjectId(resume_id)})
+# ------------------ JOB ------------------
+
+@app.post("/job/")
+async def create_job(job: JobModel):
+    try:
+        posted = datetime.strptime(job.posted_date, "%Y-%m-%d")
+        opened = datetime.strptime(job.open_date, "%Y-%m-%d")
+        closed = opened + timedelta(days=3)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    doc = job.dict()
+    doc["posted_date"] = posted.isoformat()
+    doc["open_date"] = opened.isoformat()
+    doc["close_date"] = closed.isoformat()
+    doc["hr_id"] = ObjectId(doc["hr_id"])
+
+    result = await job_collection.insert_one(doc)
+    return {"message": "Job created", "id": str(result.inserted_id)}
+
+@app.get("/job/")
+async def get_all_jobs():
+    cursor = job_collection.find({})
+    data = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        doc["hr_id"] = str(doc["hr_id"])
+        data.append(doc)
+    return data
+
+# ------------------ USER ------------------
+
+@app.post("/user/")
+async def create_user(user: UserModel):
+    result = await user_collection.insert_one(user.dict())
+    return {"message": "User created", "id": str(result.inserted_id)}
+
+@app.get("/user/")
+async def get_all_users():
+    cursor = user_collection.find({})
+    data = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        data.append(doc)
+    return data
+
+# ------------------ JOB-USER ------------------
+
+@app.post("/job-user/")
+async def create_job_user(
+        job_id: str = Form(...),
+        user_id: str = Form(...),
+        status: int = Form(...),
+        resume_score: int = Form(...),
+        resume_detail: str = Form(...),  # JSON as stringified
+        resume: UploadFile = File(...)
+):
+    file_bytes = await resume.read()
+
+    # Extract resume content if PDF
+    resume_content = None
+    if resume.content_type == "application/pdf":
+        try:
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                resume_content = "\n".join(page.extract_text() or "" for page in pdf.pages)
+        except Exception as e:
+            print("PDF parsing failed:", e)
+
+    doc = {
+        "job_id": ObjectId(job_id),
+        "user_id": ObjectId(user_id),
+        "resume_file": file_bytes,
+        "resume_filename": resume.filename,
+        "resume_content_type": resume.content_type,
+        "resume_content": resume_content,  # Add extracted text
+        "status": status,
+        "resume_score": resume_score,
+        "resume_detail": eval(resume_detail)  # Caution: eval can be dangerous
+    }
+    result = await job_user_collection.insert_one(doc)
+    return {"message": "Job application submitted", "id": str(result.inserted_id)}
+
+@app.get("/job-user/")
+async def get_all_job_users():
+    cursor = job_user_collection.find({})
+    data = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        doc["job_id"] = str(doc["job_id"])
+        doc["user_id"] = str(doc["user_id"])
+        doc["resume_file"] = None  # Don't send raw binary
+        data.append(doc)
+    return data
+
+@app.get("/job-user/download/{id}")
+async def download_resume(id: str):
+    doc = await job_user_collection.find_one({"_id": ObjectId(id)})
     if not doc:
         raise HTTPException(status_code=404, detail="Resume not found")
-
     return StreamingResponse(
-        io.BytesIO(doc["file_data"]),
-        media_type=doc["content_type"],
-        headers={"Content-Disposition": f"attachment; filename={doc['filename']}"}
+        io.BytesIO(doc["resume_file"]),
+        media_type=doc["resume_content_type"],
+        headers={"Content-Disposition": f"attachment; filename={doc['resume_filename']}"}
     )
-
-# Download resume by filename
-@app.get("/download-resume-by-name/{filename}")
-async def download_resume_by_name(filename: str):
-    doc = await collection.find_one({"filename": filename})
-    if not doc:
-        raise HTTPException(status_code=404, detail="Resume not found with that filename")
-
-    return StreamingResponse(
-        io.BytesIO(doc["file_data"]),
-        media_type=doc["content_type"],
-        headers={"Content-Disposition": f"attachment; filename={doc['filename']}"}
-    )
-
-@app.get("/get-all-users/")
-async def get_all_users():
-    cursor = collection.find({})
-    data = []
-    async for doc in cursor:
-        doc["_id"] = str(doc["_id"])  # Convert ObjectId to string
-
-        # Encode binary file_data to base64 string
-        encoded_file_data = base64.b64encode(doc["file_data"]).decode("utf-8")
-
-        doc["file_data"] = encoded_file_data
-        data.append(doc)
-    return data
-
-
-# Clear all resumes
-@app.delete("/clear/")
-async def clear_resumes():
-    result = await collection.delete_many({})
-    return {"message": "All resumes cleared", "count": result.deleted_count}
-
-# JD Model
-class JDModel(BaseModel):
-    hr_name: str
-    jd_labels: list[str]
-    priority_labels: list[str]
-    interview_start_date: str | None = None  # Format: YYYY-MM-DD
-    interview_end_date: str | None = None
-
-
-# Upload JD (HR side)
-@app.post("/upload-jd/")
-async def upload_jd(jd_data: JDModel):
-    normalized = []
-    for label in jd_data.jd_labels:
-        if "year" in label.lower() or "yr" in label.lower():
-            normalized.append(label.lower().split()[0] + " year")
-        else:
-            normalized.append(label.lower())
-    priorities = [p.lower() for p in jd_data.priority_labels]
-
-    # Optional date validation
-    interview_start = None
-    interview_end = None
-    if jd_data.interview_start_date:
-        try:
-            interview_start = datetime.strptime(jd_data.interview_start_date, "%Y-%m-%d").date()
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid interview_start_date. Use YYYY-MM-DD format.")
-    if jd_data.interview_end_date:
-        try:
-            interview_end = datetime.strptime(jd_data.interview_end_date, "%Y-%m-%d").date()
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid interview_end_date. Use YYYY-MM-DD format.")
-
-    doc = {
-        "hr_name": jd_data.hr_name.lower(),
-        "jd_labels": normalized,
-        "priority_labels": priorities,
-        "interview_start_date": interview_start.isoformat() if interview_start else None,
-        "interview_end_date": interview_end.isoformat() if interview_end else None
-    }
-
-    result = await jd_collection.insert_one(doc)
-    return {"message": "JD uploaded", "id": str(result.inserted_id)}
-
-# Get JD by ID
-@app.get("/get-jd-by-id/{id}")
-async def get_jd_by_id(id: str):
-    doc = await jd_collection.find_one({"_id": ObjectId(id)})
-    if not doc:
-        raise HTTPException(status_code=404, detail="JD not found")
-    doc["_id"] = str(doc["_id"])
-    return doc
-
-# Get JD by HR name
-@app.get("/get-jd-by-name/{hr_name}")
-async def get_jd_by_name(hr_name: str):
-    doc = await jd_collection.find_one({"hr_name": hr_name.lower()})
-    if not doc:
-        raise HTTPException(status_code=404, detail="JD not found")
-    doc["_id"] = str(doc["_id"])
-    return doc
-
-# Get all HR (JD) details
-@app.get("/get-all-jds/")
-async def get_all_jds():
-    cursor = jd_collection.find({})
-    data = []
-    async for doc in cursor:
-        doc["_id"] = str(doc["_id"])  # Convert ObjectId to string
-        data.append(doc)
-    return data
-
