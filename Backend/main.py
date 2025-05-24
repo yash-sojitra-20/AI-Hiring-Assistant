@@ -6,7 +6,11 @@ from db import collection, jd_collection
 from label_extractor import extract_labels
 import pdfplumber
 from docx import Document
+from datetime import datetime
+from fastapi import Query
 import io
+import base64
+
 
 app = FastAPI()
 
@@ -22,7 +26,18 @@ def read_docx(file_bytes) -> str:
 
 # Upload resume with user_name
 @app.post("/upload-resume/")
-async def upload_resume(user_name: str = Form(...), file: UploadFile = File(...)):
+async def upload_resume(
+        user_name: str = Form(...),
+        interview_date: str = Form(...),  # expecting "YYYY-MM-DD"
+        interview_time: str = Form(...),  # expecting "HH:MM" 24h format
+        file: UploadFile = File(...)
+):
+    # Basic validation of date and time (optional, but recommended)
+    try:
+        interview_datetime = datetime.strptime(f"{interview_date} {interview_time}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date or time format. Use YYYY-MM-DD for date and HH:MM (24h) for time.")
+
     file_bytes = await file.read()
 
     if file.content_type == "application/pdf":
@@ -40,14 +55,19 @@ async def upload_resume(user_name: str = Form(...), file: UploadFile = File(...)
         "content": text,
         "labels": labels,
         "file_data": file_bytes,
-        "content_type": file.content_type
+        "content_type": file.content_type,
+        "interview_date": interview_date,
+        "interview_time": interview_time,
+        "interview_datetime": interview_datetime.isoformat()  # ISO formatted combined datetime
     }
 
     result = await collection.insert_one(doc)
     return {
         "message": "Resume uploaded",
         "id": str(result.inserted_id),
-        "labels": labels
+        "labels": labels,
+        "interview_date": interview_date,
+        "interview_time": interview_time
     }
 
 # Get all resume labels
@@ -90,6 +110,21 @@ async def download_resume_by_name(filename: str):
         headers={"Content-Disposition": f"attachment; filename={doc['filename']}"}
     )
 
+@app.get("/get-all-users/")
+async def get_all_users():
+    cursor = collection.find({})
+    data = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])  # Convert ObjectId to string
+
+        # Encode binary file_data to base64 string
+        encoded_file_data = base64.b64encode(doc["file_data"]).decode("utf-8")
+
+        doc["file_data"] = encoded_file_data
+        data.append(doc)
+    return data
+
+
 # Clear all resumes
 @app.delete("/clear/")
 async def clear_resumes():
@@ -101,6 +136,9 @@ class JDModel(BaseModel):
     hr_name: str
     jd_labels: list[str]
     priority_labels: list[str]
+    interview_start_date: str | None = None  # Format: YYYY-MM-DD
+    interview_end_date: str | None = None
+
 
 # Upload JD (HR side)
 @app.post("/upload-jd/")
@@ -113,11 +151,28 @@ async def upload_jd(jd_data: JDModel):
             normalized.append(label.lower())
     priorities = [p.lower() for p in jd_data.priority_labels]
 
+    # Optional date validation
+    interview_start = None
+    interview_end = None
+    if jd_data.interview_start_date:
+        try:
+            interview_start = datetime.strptime(jd_data.interview_start_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid interview_start_date. Use YYYY-MM-DD format.")
+    if jd_data.interview_end_date:
+        try:
+            interview_end = datetime.strptime(jd_data.interview_end_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid interview_end_date. Use YYYY-MM-DD format.")
+
     doc = {
         "hr_name": jd_data.hr_name.lower(),
         "jd_labels": normalized,
-        "priority_labels": priorities
+        "priority_labels": priorities,
+        "interview_start_date": interview_start.isoformat() if interview_start else None,
+        "interview_end_date": interview_end.isoformat() if interview_end else None
     }
+
     result = await jd_collection.insert_one(doc)
     return {"message": "JD uploaded", "id": str(result.inserted_id)}
 
@@ -138,3 +193,14 @@ async def get_jd_by_name(hr_name: str):
         raise HTTPException(status_code=404, detail="JD not found")
     doc["_id"] = str(doc["_id"])
     return doc
+
+# Get all HR (JD) details
+@app.get("/get-all-jds/")
+async def get_all_jds():
+    cursor = jd_collection.find({})
+    data = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])  # Convert ObjectId to string
+        data.append(doc)
+    return data
+
