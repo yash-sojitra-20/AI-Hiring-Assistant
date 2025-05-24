@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List
@@ -63,6 +63,17 @@ async def get_all_hrs():
         data.append(doc)
     return data
 
+@app.get("/hr/login/")
+async def get_hr_by_credentials(
+        hr_username: str = Query(..., description="HR's username"),
+        hr_pass: str = Query(..., description="HR's password")
+):
+    hr = await hr_collection.find_one({"hr_username": hr_username, "hr_pass": hr_pass})
+    if not hr:
+        raise HTTPException(status_code=404, detail="HR not found or invalid credentials")
+    hr["_id"] = str(hr["_id"])
+    return hr
+
 # ------------------ JOB ------------------
 
 @app.post("/job/")
@@ -93,6 +104,16 @@ async def get_all_jobs():
         data.append(doc)
     return data
 
+@app.get("/job/byHrId/{hr_id}")
+async def get_jobs_by_hr_id(hr_id: str = Path(..., description="HR's ObjectId as string")):
+    cursor = job_collection.find({"hr_id": ObjectId(hr_id)})
+    data = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        doc["hr_id"] = str(doc["hr_id"])
+        data.append(doc)
+    return data
+
 # ------------------ USER ------------------
 
 @app.post("/user/")
@@ -108,6 +129,17 @@ async def get_all_users():
         doc["_id"] = str(doc["_id"])
         data.append(doc)
     return data
+
+@app.get("/user/login/")
+async def get_user_by_credentials(
+        user_name: str = Query(..., description="User's username"),
+        user_pass: str = Query(..., description="User's password")
+):
+    user = await user_collection.find_one({"user_name": user_name, "user_pass": user_pass})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found or invalid credentials")
+    user["_id"] = str(user["_id"])
+    return user
 
 # ------------------ JOB-USER ------------------
 
@@ -167,3 +199,41 @@ async def download_resume(id: str):
         media_type=doc["resume_content_type"],
         headers={"Content-Disposition": f"attachment; filename={doc['resume_filename']}"}
     )
+
+# Get job-user document by _id
+@app.get("/job-user/byId/{id}")
+async def get_job_user_by_id(id: str = Path(..., description="The ID of the job-user document")):
+    doc = await job_user_collection.find_one({"_id": ObjectId(id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="JobUser document not found")
+    doc["_id"] = str(doc["_id"])
+    doc["job_id"] = str(doc["job_id"])
+    doc["user_id"] = str(doc["user_id"])
+    doc["resume_file"] = None  # don't send raw binary
+    return doc
+
+# Get all job-user documents by job_id
+@app.get("/job-user/byJobId/{job_id}")
+async def get_job_users_by_job_id(job_id: str = Path(..., description="Job ID to filter by")):
+    cursor = job_user_collection.find({"job_id": ObjectId(job_id)})
+    results = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        doc["job_id"] = str(doc["job_id"])
+        doc["user_id"] = str(doc["user_id"])
+        doc["resume_file"] = None
+        results.append(doc)
+    return results
+
+# Get all job-user documents by user_id
+@app.get("/job-user/byUserId/{user_id}")
+async def get_job_users_by_user_id(user_id: str = Path(..., description="User ID to filter by")):
+    cursor = job_user_collection.find({"user_id": ObjectId(user_id)})
+    results = []
+    async for doc in cursor:
+        doc["_id"] = str(doc["_id"])
+        doc["job_id"] = str(doc["job_id"])
+        doc["user_id"] = str(doc["user_id"])
+        doc["resume_file"] = None
+        results.append(doc)
+    return results
