@@ -86,7 +86,7 @@ def score_transcript(transcript: str) -> Dict[str, Any]:
 
 
 # Example usage
-if __name__ == "_main_":
+if __name__ == "__main__":
     sample_transcript = """
     AI: What is a REST API?
     Candidate: REST stands for Representational State Transfer. It is an architecture that uses HTTP methods like GET, POST...

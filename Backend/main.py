@@ -12,6 +12,7 @@ import logging
 import pdfplumber
 from app.resume_parser import extract_and_score_resume
 from app.scheduler import start_scheduler, schedule_workflow
+from app.question_generator import generate_questions_with_answers
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -119,16 +120,23 @@ async def get_hr_by_credentials(
 @app.post("/job/")
 async def create_job(job: JobModel):
     try:
+        # Parse dates
         posted = datetime.strptime(job.posted_date, "%Y-%m-%d")
         opened = datetime.strptime(job.open_date, "%Y-%m-%d")
         closed = opened + timedelta(days=3)
 
+        # Generate questions based on job description
+        job_questions = generate_questions_with_answers(job.job_des)
+
+        # Prepare the job document
         doc = job.dict()
         doc["posted_date"] = posted.isoformat()
         doc["open_date"] = opened.isoformat()
         doc["close_date"] = closed.isoformat()
         doc["hr_id"] = ObjectId(doc["hr_id"])
+        doc["job_questions"] = job_questions  # Add generated questions
 
+        # Insert the job into the database
         result = await job_collection.insert_one(doc)
 
         # Schedule workflow

@@ -76,7 +76,7 @@ def generate_questions_with_answers(labels: List[str]) -> List[Dict[str, str]]:
 
 
 # Example usage
-if __name__ == "_main_":
+if __name__ == "__main__":
     topics = ["Java", "Spring Boot", "React"]
     qa_pairs = generate_questions_with_answers(topics)
     print(json.dumps(qa_pairs,indent=2))
