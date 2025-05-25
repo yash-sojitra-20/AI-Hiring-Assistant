@@ -143,10 +143,10 @@ async def create_job(job: JobModel):
         now = datetime.now()
         timings = {
             "resume_start": now + timedelta(minutes=0),
-            "resume_end": now + timedelta(minutes=2),
-            "coding_start": now + timedelta(minutes=3),
-            "coding_end": now + timedelta(minutes=4),
-            "interview_start": now + timedelta(minutes=4),
+            "resume_end": now + timedelta(minutes=5),
+            "coding_start": now + timedelta(minutes=6),
+            "coding_end": now + timedelta(minutes=7),
+            "interview_start": now + timedelta(minutes=8),
         }
         schedule_workflow(str(result.inserted_id), timings)
 
@@ -157,8 +157,8 @@ async def create_job(job: JobModel):
         logger.error(f"Error creating job: {e}")
         raise HTTPException(status_code=500, detail="Failed to create job")
 
-@app.get("/job/")
-async def get_all_jobs() -> List[Dict[str, Any]]:
+@app.get("/job/{user_id}")
+async def get_all_jobs(user_id: str) -> List[Dict[str, Any]]:
     try:
         today = datetime.utcnow()
 
@@ -177,6 +177,26 @@ async def get_all_jobs() -> List[Dict[str, Any]]:
                 if close_date >= today:
                     doc["_id"] = str(doc["_id"])
                     doc["hr_id"] = str(doc["hr_id"])
+
+                    # Check if the user has applied for this job
+                    job_user = await job_user_collection.find_one({
+                        "job_id": ObjectId(doc["_id"]),
+                        "user_id": ObjectId(user_id)
+                    })
+                    doc["applied"] = bool(job_user)  # Set applied = true if found, else false
+
+                    # Fetch HR details using hr_id
+                    hr = await hr_collection.find_one({"_id": ObjectId(doc["hr_id"])})
+                    if hr:
+                        hr["_id"] = str(hr["_id"])
+                        doc["hr_details"] = {
+                            "hr_username": hr.get("hr_username"),
+                            "hr_email": hr.get("hr_email"),
+                            "hr_company": hr.get("hr_company"),
+                            "hr_location": hr.get("hr_location"),
+                            "hr_description": hr.get("hr_description"),
+                        }
+
                     data.append(doc)
 
         return data
@@ -198,6 +218,50 @@ async def get_jobs_by_hr_id(hr_id: str = Path(...)) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error fetching jobs by HR ID: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch jobs")
+
+@app.get("/job/byJobId/{job_id}/{user_id}")
+async def get_job_by_job_id_and_user_id(
+        job_id: str = Path(...),
+        user_id: str = Path(...)
+) -> Dict[str, Any]:
+    try:
+        # Fetch the job document by job_id
+        doc = await job_collection.find_one({"_id": ObjectId(job_id)})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        # Convert ObjectId fields to strings
+        doc["_id"] = str(doc["_id"])
+        doc["hr_id"] = str(doc["hr_id"])
+
+        # Check if the user has applied for this job and fetch the status
+        job_user = await job_user_collection.find_one({
+            "job_id": ObjectId(job_id),
+            "user_id": ObjectId(user_id)
+        })
+        if job_user:
+            doc["applied"] = True
+            doc["status"] = job_user.get("status", None)  # Add status if available
+        else:
+            doc["applied"] = False
+            doc["status"] = None  # Set status to None if not applied
+
+        # Fetch HR details using hr_id
+        hr = await hr_collection.find_one({"_id": ObjectId(doc["hr_id"])})
+        if hr:
+            hr["_id"] = str(hr["_id"])
+            doc["hr_details"] = {
+                "hr_username": hr.get("hr_username"),
+                "hr_email": hr.get("hr_email"),
+                "hr_company": hr.get("hr_company"),
+                "hr_location": hr.get("hr_location"),
+                "hr_description": hr.get("hr_description"),
+            }
+
+        return doc
+    except Exception as e:
+        logger.error(f"Error fetching job by Job ID and User ID: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch job")
 
 # ------------------ User Routes ------------------
 
@@ -273,7 +337,7 @@ async def get_user_by_credentials(
 async def create_job_user(
         job_id: str = Form(...),
         user_id: str = Form(...),
-        status: int = Form(...),
+        status: int = Form(1),  # Default value set to 1
         technical_score: Optional[float] = Form(None),  # New optional field
         resume: UploadFile = File(...)
 ):
@@ -320,7 +384,7 @@ async def create_job_user(
             "resume_filename": resume.filename,
             "resume_content_type": resume.content_type,
             "resume_content": resume_content,
-            "status": status,
+            "status": status,  # Default value is used if not provided
             "resume_score": resume_score,
             "technical_score": technical_score,  # New field
             "resume_detail": scoring_result,
@@ -333,6 +397,7 @@ async def create_job_user(
         return {
             "message": "Application submitted successfully",
             "id": str(result.inserted_id),
+            "status": status,  # Include status in the response
             "resume_score": resume_score,
             "technical_score": technical_score,
             "resume_detail": scoring_result
