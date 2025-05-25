@@ -8,6 +8,8 @@ from db import hr_collection, job_collection, user_collection, job_user_collecti
 import io
 import pdfplumber
 
+from app.scheduler import start_scheduler, schedule_workflow
+
 app = FastAPI()
 
 # Utility: Pydantic Mongo ObjectId compatibility
@@ -92,6 +94,21 @@ async def create_job(job: JobModel):
     doc["hr_id"] = ObjectId(doc["hr_id"])
 
     result = await job_collection.insert_one(doc)
+
+    # When added job --> schedular will start and does it work...
+    # To bhadani Tirth : we have to just add proper timings JSON
+    start_scheduler()
+    now = datetime.now()
+    timings={
+            "resume_start": now + timedelta(minutes=1),
+            "resume_end": now + timedelta(minutes=2),
+            "coding_start": now + timedelta(minutes=3),
+            "coding_end": now + timedelta(minutes=4),
+            "interview_start": now + timedelta(minutes=5),
+        }
+    # schedule_workflow(job_id, timings_dict_from_db)
+    schedule_workflow(result.inserted_id, timings)
+
     return {"message": "Job created", "id": str(result.inserted_id)}
 
 @app.get("/job/")
