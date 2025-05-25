@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 
-async def select_top_candidates(job_id: str, percentage: float = 0.5) -> List[str]:
+async def select_top_candidates(job_id: str, percentage: float = 1.0) -> List[str]:
     """
     Select top candidates based on resume score
     Args:
@@ -27,7 +27,7 @@ async def select_top_candidates(job_id: str, percentage: float = 0.5) -> List[st
         async for doc in cursor:
             applications.append({
                 "user_id": str(doc["user_id"]),
-                "score": doc.get("resume_score", 0)
+                "score": doc.get("resume_score", 2)
             })
 
         if not applications:

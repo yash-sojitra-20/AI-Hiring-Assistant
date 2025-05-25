@@ -2,47 +2,37 @@
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
-from datetime import datetime , timedelta
+from datetime import datetime, timedelta
 import logging
+import asyncio
+import time  # Import the time module
+from bson import ObjectId
 from app.candidate_selector import select_top_candidates
 from app.notification_service import send_coding_round_emails
-
-import time
-
 from db import job_user_collection
 
-# Import your existing services here
-# from app.resume_processor import process_resumes
-# from app.email_service import send_coding_round_emails, send_interview_invites
-# from app.evaluator import evaluate_submissions
-
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler()
-
-# These are placeholders for your actual task functions
-def start_resume_collection(job_id):
-    logging.info(f"[Job {job_id}] Resume collection started.")
-    # Trigger logic if needed
-
-from app.notification_service import send_coding_round_emails
 
 print("\n\nScheduler initialized.\n\n")
 
+def start_resume_collection(job_id):
+    logging.info(f"[Job {job_id}] Resume collection started.")
+
 def end_resume_collection(job_id: str):
     try:
-
         print("\n\nEnding resume collection for job:\n\n")
 
-        selected_candidates = select_top_candidates(job_id)
+        # Call the async function using asyncio.run
+        selected_candidates = asyncio.run(select_top_candidates(job_id, 0.5))
 
         if selected_candidates:
             logger.info(f"Selected {len(selected_candidates)} candidates for job {job_id}")
-
             print("\n\nSelected candidates:\n\n")
 
-            # Send emails to selected candidates
-            send_coding_round_emails(job_id, selected_candidates)
-
+            # Call the async function using asyncio.run
+            asyncio.run(send_coding_round_emails(job_id, selected_candidates))
             print("\n\nSending coding round emails...\n\n")
 
             # Update status
@@ -60,20 +50,14 @@ def end_resume_collection(job_id: str):
         logger.error(f"Error in end_resume_collection for job {job_id}: {e}")
         return []
 
-
 def start_coding_round(job_id):
     logging.info(f"[Job {job_id}] Coding round started.")
 
-
 def end_coding_round(job_id):
     logging.info(f"[Job {job_id}] Coding round ended. Evaluating submissions...")
-    # evaluate_submissions(job_id)
-    # send_interview_invites(job_id)
-
 
 def start_interview_round(job_id):
     logging.info(f"[Job {job_id}] Interview round started.")
-
 
 def schedule_workflow(job_id, timings):
     """
@@ -93,34 +77,17 @@ def schedule_workflow(job_id, timings):
     scheduler.add_job(end_coding_round, DateTrigger(run_date=timings['coding_end']), args=[job_id])
     scheduler.add_job(start_interview_round, DateTrigger(run_date=timings['interview_start']), args=[job_id])
 
-
 def start_scheduler():
     if not scheduler.running:
         scheduler.start()
         logging.info("Scheduler started.")
 
-
 # # Example usage:
 # if __name__ == "__main__":
-#     # This can be triggered manually or when server starts
 #     start_scheduler()
 #     now = datetime.now()
 #     schedule_workflow(
-#         job_id=123,
-#         # timings={
-#         #     "resume_start": datetime(2025, 5, 23, 9, 0),
-#         #     "resume_end": datetime(2025, 5, 23, 18, 0),
-#         #     "coding_start": datetime(2025, 5, 24, 9, 0),
-#         #     "coding_end": datetime(2025, 5, 24, 18, 0),
-#         #     "interview_start": datetime(2025, 5, 25, 10, 0),
-#         # },
-#         # timings={
-#         #     "resume_start": now + timedelta(minutes=1),
-#         #     "resume_end": now + timedelta(minutes=2),
-#         #     "coding_start": now + timedelta(minutes=3),
-#         #     "coding_end": now + timedelta(minutes=4),
-#         #     "interview_start": now + timedelta(minutes=5),
-#         # },
+#         job_id="123",
 #         timings={
 #             "resume_start": now + timedelta(seconds=10),
 #             "resume_end": now + timedelta(seconds=20),
@@ -129,8 +96,8 @@ def start_scheduler():
 #             "interview_start": now + timedelta(seconds=50),
 #         },
 #     )
-
-#     # 🧪 For testing: wait 1 minute to see everything fire
+#
+#     # Wait 1 minute to see everything fire
 #     try:
 #         time.sleep(60)
 #     except KeyboardInterrupt:

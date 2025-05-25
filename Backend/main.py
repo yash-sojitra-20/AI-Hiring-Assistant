@@ -11,12 +11,11 @@ import json
 import logging
 import pdfplumber
 from app.resume_parser import extract_and_score_resume
+from app.scheduler import start_scheduler, schedule_workflow
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-from app.scheduler import start_scheduler, schedule_workflow
 
 app = FastAPI()
 
@@ -57,6 +56,12 @@ class JobUserModel(BaseModel):
     status: int
     resume_detail: Dict[str, Any]
     resume_score: float
+
+# ------------------ APP STARTUP ------------------
+
+@app.on_event("startup")
+async def startup_event():
+    start_scheduler()
 
 # ------------------ HR Routes ------------------
 
@@ -116,51 +121,23 @@ async def create_job(job: JobModel):
 
         result = await job_collection.insert_one(doc)
 
-        # When added job --> schedular will start and does it work...
-        # To bhadani Tirth : we have to just add proper timings JSON
-        start_scheduler()
+        # Schedule workflow
         now = datetime.now()
-        timings={
+        timings = {
             "resume_start": now + timedelta(minutes=0),
             "resume_end": now + timedelta(minutes=3),
             "coding_start": now + timedelta(minutes=4),
             "coding_end": now + timedelta(minutes=5),
             "interview_start": now + timedelta(minutes=6),
         }
-        # schedule_workflow(job_id, timings_dict_from_db)
-        schedule_workflow(result.inserted_id, timings)
+        schedule_workflow(str(result.inserted_id), timings)
 
         return {"message": "Job created", "id": str(result.inserted_id)}
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
-
-    # doc = job.dict()
-    # doc["posted_date"] = posted.isoformat()
-    # doc["open_date"] = opened.isoformat()
-    # doc["close_date"] = closed.isoformat()
-    # doc["hr_id"] = ObjectId(doc["hr_id"])
-
-    # result = await job_collection.insert_one(doc)
-
-    # # When added job --> schedular will start and does it work...
-    # # To bhadani Tirth : we have to just add proper timings JSON
-    # start_scheduler()
-    # now = datetime.now()
-    # timings={
-    #         "resume_start": now + timedelta(minutes=1),
-    #         "resume_end": now + timedelta(minutes=2),
-    #         "coding_start": now + timedelta(minutes=3),
-    #         "coding_end": now + timedelta(minutes=4),
-    #         "interview_start": now + timedelta(minutes=5),
-    #     }
-    # # schedule_workflow(job_id, timings_dict_from_db)
-    # schedule_workflow(result.inserted_id, timings)
-
-    # return {"message": "Job created", "id": str(result.inserted_id)}
-    #     raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
-    # except Exception as e:
-    #     logger.error(f"Error creating job: {e}")
-    #     raise HTTPException(status_code=500, detail="Failed to create job")
+    except Exception as e:
+        logger.error(f"Error creating job: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create job")
 
 @app.get("/job/")
 async def get_all_jobs() -> List[Dict[str, Any]]:
@@ -194,9 +171,7 @@ async def get_jobs_by_hr_id(hr_id: str = Path(...)) -> List[Dict[str, Any]]:
 
 @app.post("/user/")
 async def create_user(user: UserModel):
-    """Create a new user with username, password and email"""
     try:
-        # Check if user already exists
         existing_user = await user_collection.find_one({
             "$or": [
                 {"user_name": user.user_name},
@@ -238,7 +213,6 @@ async def get_user_by_credentials(
         user_name: str = Query(...),
         user_pass: str = Query(...)
 ) -> dict:
-    """Login user with username and password"""
     try:
         user = await user_collection.find_one({
             "user_name": user_name,
@@ -271,7 +245,6 @@ async def create_job_user(
         resume: UploadFile = File(...)
 ):
     try:
-        # Validate file
         if not resume.filename or not resume.content_type == "application/pdf":
             raise HTTPException(status_code=400, detail="Invalid file format. Please upload a PDF")
 
@@ -279,7 +252,6 @@ async def create_job_user(
         if not file_bytes:
             raise HTTPException(status_code=400, detail="Empty file")
 
-        # Extract text from PDF
         try:
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                 resume_content = "\n".join(page.extract_text() or "" for page in pdf.pages)
@@ -289,7 +261,6 @@ async def create_job_user(
             logger.error(f"PDF parsing error: {e}")
             raise HTTPException(status_code=400, detail="Failed to parse PDF")
 
-        # Get job requirements
         job_doc = await job_collection.find_one({"_id": ObjectId(job_id)})
         if not job_doc:
             raise HTTPException(status_code=404, detail="Job not found")
@@ -298,9 +269,7 @@ async def create_job_user(
         if not job_description:
             raise HTTPException(status_code=400, detail="No job description found for job")
         requirements = [job_description]
-        # print("Requirements (from job description):", requirements)
 
-        # Process resume scoring
         try:
             scoring_result = extract_and_score_resume(resume_content, requirements)
             if isinstance(scoring_result, str):
@@ -311,7 +280,6 @@ async def create_job_user(
             resume_score = 0
             scoring_result = {"error": "Failed to score resume", "details": str(e)}
 
-        # Create document
         doc = {
             "job_id": ObjectId(job_id),
             "user_id": ObjectId(user_id),
