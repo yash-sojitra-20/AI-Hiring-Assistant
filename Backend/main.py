@@ -33,6 +33,11 @@ app.add_middleware(
 class HRModel(BaseModel):
     hr_username: str
     hr_pass: str
+    hr_email: EmailStr
+    hr_company: str
+    hr_location: str
+    hr_description: Optional[str] = None  # Optional field
+
 
 class JobModel(BaseModel):
     job_des: List[str]
@@ -44,11 +49,9 @@ class JobModel(BaseModel):
     open_date: str
     problem_statements: List[str]
     hr_id: str
+    job_salary: Optional[float] = None  # Optional field
+    job_questions: Optional[List[str]] = None  # Optional field
 
-class UserModel(BaseModel):
-    user_name: str
-    user_pass: str
-    email: EmailStr
 
 class JobUserModel(BaseModel):
     job_id: str
@@ -56,6 +59,13 @@ class JobUserModel(BaseModel):
     status: int
     resume_detail: Dict[str, Any]
     resume_score: float
+    technical_score: Optional[float] = None  # Optional field
+
+
+class UserModel(BaseModel):
+    user_name: str
+    user_pass: str
+    email: EmailStr
 
 # ------------------ APP STARTUP ------------------
 
@@ -65,7 +75,7 @@ async def startup_event():
 
 # ------------------ HR Routes ------------------
 
-@app.post("/hr/")
+@app.post("/hr/signup")
 async def create_hr(hr: HRModel):
     try:
         result = await hr_collection.insert_one(hr.dict())
@@ -89,11 +99,11 @@ async def get_all_hrs() -> List[Dict[str, Any]]:
 
 @app.get("/hr/login/")
 async def get_hr_by_credentials(
-        hr_username: str = Query(...),
+        hr_email: str = Query(...),
         hr_pass: str = Query(...)
 ) -> dict:
     try:
-        hr = await hr_collection.find_one({"hr_username": hr_username, "hr_pass": hr_pass})
+        hr = await hr_collection.find_one({"hr_email": hr_email, "hr_pass": hr_pass})
         if not hr:
             raise HTTPException(status_code=404, detail="Invalid HR credentials")
         hr["_id"] = str(hr["_id"])
@@ -242,6 +252,7 @@ async def create_job_user(
         job_id: str = Form(...),
         user_id: str = Form(...),
         status: int = Form(...),
+        technical_score: Optional[float] = Form(None),  # New optional field
         resume: UploadFile = File(...)
 ):
     try:
@@ -289,6 +300,7 @@ async def create_job_user(
             "resume_content": resume_content,
             "status": status,
             "resume_score": resume_score,
+            "technical_score": technical_score,  # New field
             "resume_detail": scoring_result,
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow()
@@ -300,6 +312,7 @@ async def create_job_user(
             "message": "Application submitted successfully",
             "id": str(result.inserted_id),
             "resume_score": resume_score,
+            "technical_score": technical_score,
             "resume_detail": scoring_result
         }
 
