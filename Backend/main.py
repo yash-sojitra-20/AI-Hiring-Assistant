@@ -125,10 +125,10 @@ async def create_job(job: JobModel):
         now = datetime.now()
         timings = {
             "resume_start": now + timedelta(minutes=0),
-            "resume_end": now + timedelta(minutes=3),
-            "coding_start": now + timedelta(minutes=4),
-            "coding_end": now + timedelta(minutes=5),
-            "interview_start": now + timedelta(minutes=6),
+            "resume_end": now + timedelta(minutes=2),
+            "coding_start": now + timedelta(minutes=3),
+            "coding_end": now + timedelta(minutes=4),
+            "interview_start": now + timedelta(minutes=4),
         }
         schedule_workflow(str(result.inserted_id), timings)
 
