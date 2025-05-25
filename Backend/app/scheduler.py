@@ -4,7 +4,12 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
 from datetime import datetime , timedelta
 import logging
+from app.candidate_selector import select_top_candidates
+from app.notification_service import send_coding_round_emails
+
 import time
+
+from db import job_user_collection
 
 # Import your existing services here
 # from app.resume_processor import process_resumes
@@ -19,12 +24,41 @@ def start_resume_collection(job_id):
     logging.info(f"[Job {job_id}] Resume collection started.")
     # Trigger logic if needed
 
+from app.notification_service import send_coding_round_emails
 
-def end_resume_collection(job_id):
-    logging.info(f"[Job {job_id}] Resume collection ended. Starting resume evaluation...")
-    # process_resumes(job_id)
-    # select top candidates
-    # send_coding_round_emails(job_id)
+print("\n\nScheduler initialized.\n\n")
+
+def end_resume_collection(job_id: str):
+    try:
+
+        print("\n\nEnding resume collection for job:\n\n")
+
+        selected_candidates = select_top_candidates(job_id)
+
+        if selected_candidates:
+            logger.info(f"Selected {len(selected_candidates)} candidates for job {job_id}")
+
+            print("\n\nSelected candidates:\n\n")
+
+            # Send emails to selected candidates
+            send_coding_round_emails(job_id, selected_candidates)
+
+            print("\n\nSending coding round emails...\n\n")
+
+            # Update status
+            for candidate_id in selected_candidates:
+                job_user_collection.update_one(
+                    {"_id": ObjectId(candidate_id)},
+                    {"$set": {"status": 2}}
+                )
+            return selected_candidates
+        else:
+            logger.warning(f"No candidates selected for job {job_id}")
+            return []
+
+    except Exception as e:
+        logger.error(f"Error in end_resume_collection for job {job_id}: {e}")
+        return []
 
 
 def start_coding_round(job_id):

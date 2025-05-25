@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path, Query, Body
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from bson import ObjectId
 from datetime import datetime, timedelta
@@ -49,6 +49,7 @@ class JobModel(BaseModel):
 class UserModel(BaseModel):
     user_name: str
     user_pass: str
+    email: EmailStr
 
 class JobUserModel(BaseModel):
     job_id: str
@@ -120,12 +121,12 @@ async def create_job(job: JobModel):
         start_scheduler()
         now = datetime.now()
         timings={
-                "resume_start": now + timedelta(minutes=1),
-                "resume_end": now + timedelta(minutes=2),
-                "coding_start": now + timedelta(minutes=3),
-                "coding_end": now + timedelta(minutes=4),
-                "interview_start": now + timedelta(minutes=5),
-            }
+            "resume_start": now + timedelta(minutes=0),
+            "resume_end": now + timedelta(minutes=3),
+            "coding_start": now + timedelta(minutes=4),
+            "coding_end": now + timedelta(minutes=5),
+            "interview_start": now + timedelta(minutes=6),
+        }
         # schedule_workflow(job_id, timings_dict_from_db)
         schedule_workflow(result.inserted_id, timings)
 
@@ -193,9 +194,28 @@ async def get_jobs_by_hr_id(hr_id: str = Path(...)) -> List[Dict[str, Any]]:
 
 @app.post("/user/")
 async def create_user(user: UserModel):
+    """Create a new user with username, password and email"""
     try:
+        # Check if user already exists
+        existing_user = await user_collection.find_one({
+            "$or": [
+                {"user_name": user.user_name},
+                {"email": user.email}
+            ]
+        })
+        if existing_user:
+            raise HTTPException(
+                status_code=400,
+                detail="Username or email already exists"
+            )
+
         result = await user_collection.insert_one(user.dict())
-        return {"message": "User created", "id": str(result.inserted_id)}
+        new_user = await user_collection.find_one({"_id": result.inserted_id})
+        new_user["_id"] = str(new_user["_id"])
+        return new_user
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating user: {e}")
         raise HTTPException(status_code=500, detail="Failed to create user")
@@ -218,12 +238,23 @@ async def get_user_by_credentials(
         user_name: str = Query(...),
         user_pass: str = Query(...)
 ) -> dict:
+    """Login user with username and password"""
     try:
-        user = await user_collection.find_one({"user_name": user_name, "user_pass": user_pass})
+        user = await user_collection.find_one({
+            "user_name": user_name,
+            "user_pass": user_pass
+        })
         if not user:
-            raise HTTPException(status_code=404, detail="Invalid user credentials")
+            raise HTTPException(
+                status_code=404,
+                detail="Invalid user credentials"
+            )
         user["_id"] = str(user["_id"])
-        return user
+        return {
+            "id": user["_id"],
+            "user_name": user["user_name"],
+            "email": user["email"]
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -269,7 +300,7 @@ async def create_job_user(
         requirements = [job_description]
         # print("Requirements (from job description):", requirements)
 
-# Process resume scoring
+        # Process resume scoring
         try:
             scoring_result = extract_and_score_resume(resume_content, requirements)
             if isinstance(scoring_result, str):
