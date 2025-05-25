@@ -221,11 +221,13 @@ async def create_job_user(
         if not job_doc:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        requirements = job_doc.get("problem_statements", [])
-        if not requirements:
-            raise HTTPException(status_code=400, detail="No requirements found for job")
+        job_description = job_doc.get("job_des", "")
+        if not job_description:
+            raise HTTPException(status_code=400, detail="No job description found for job")
+        requirements = [job_description]
+        # print("Requirements (from job description):", requirements)
 
-        # Process resume scoring
+# Process resume scoring
         try:
             scoring_result = extract_and_score_resume(resume_content, requirements)
             if isinstance(scoring_result, str):
