@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Path, Query, Body
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -346,3 +346,18 @@ async def get_job_users_by_user_id(user_id: str) -> List[dict]:
     except Exception as e:
         logger.error(f"Error fetching applications by user ID: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch applications")
+
+@app.patch("/job-user/status/{id}")
+async def update_job_user_status(id: str, status: int = Body(..., embed=True)):
+    try:
+        result = await job_user_collection.update_one(
+            {"_id": ObjectId(id)},
+            {"$set": {"status": status, "updated_at": datetime.utcnow()}}
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Application not found or status unchanged")
+
+        return {"message": "Status updated successfully", "id": id, "new_status": status}
+    except Exception as e:
+        logger.error(f"Error updating status: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update status")
