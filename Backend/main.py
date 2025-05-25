@@ -126,7 +126,7 @@ async def create_job(job: JobModel):
         closed = opened + timedelta(days=3)
 
         # Generate questions based on job description
-        job_questions = generate_questions_with_answers(job.job_des)
+        job_questions = generate_questions_with_answers(job.problem_statements)
 
         # Prepare the job document
         doc = job.dict()
