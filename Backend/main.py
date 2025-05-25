@@ -160,13 +160,27 @@ async def create_job(job: JobModel):
 @app.get("/job/")
 async def get_all_jobs() -> List[Dict[str, Any]]:
     try:
+        today = datetime.utcnow()
+
         cursor = job_collection.find({})
         data = []
+
         async for doc in cursor:
-            doc["_id"] = str(doc["_id"])
-            doc["hr_id"] = str(doc["hr_id"])
-            data.append(doc)
+            # Convert string dates to datetime objects
+            close_date = doc.get("close_date")
+            if close_date:
+                # Convert ISO date string to datetime if needed
+                if isinstance(close_date, str):
+                    close_date = datetime.fromisoformat(close_date)
+
+                # Filter: Only include jobs whose close_date is today or in the future
+                if close_date >= today:
+                    doc["_id"] = str(doc["_id"])
+                    doc["hr_id"] = str(doc["hr_id"])
+                    data.append(doc)
+
         return data
+
     except Exception as e:
         logger.error(f"Error fetching jobs: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch jobs")
@@ -187,7 +201,7 @@ async def get_jobs_by_hr_id(hr_id: str = Path(...)) -> List[Dict[str, Any]]:
 
 # ------------------ User Routes ------------------
 
-@app.post("/user/")
+@app.post("/user/signup")
 async def create_user(user: UserModel):
     try:
         existing_user = await user_collection.find_one({
@@ -228,12 +242,12 @@ async def get_all_users() -> List[Dict[str, Any]]:
 
 @app.get("/user/login/")
 async def get_user_by_credentials(
-        user_name: str = Query(...),
+        email: str = Query(...),
         user_pass: str = Query(...)
 ) -> dict:
     try:
         user = await user_collection.find_one({
-            "user_name": user_name,
+            "email": email,
             "user_pass": user_pass
         })
         if not user:
