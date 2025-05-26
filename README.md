@@ -1,8 +1,22 @@
-# 🤖 AI-Powered Hiring Assistant
+# 🤖 hiroBOT : AI-Powered Hiring Assistant
 
-An end-to-end **AI-driven hiring automation platform** that solves real-world recruitment bottlenecks using **multimodal intelligence, automated scheduling, resume parsing**, and **voice-based coding interviews**.
-
-![Hiring Assistant Demo](assets/banner.gif)
+<table style="width: 100%; border-collapse: collapse;">
+  <tr>
+    <!-- Left Column: Text -->
+    <td style="vertical-align: top; padding-right: 30px; width: 60%;">
+      <h2 style="margin: 0;">Streamlining recruitment with intelligent automation.</h2>
+      <p>
+        An end-to-end <strong>AI-driven hiring automation platform</strong> that solves real-world recruitment
+        bottlenecks using <strong>multimodal intelligence, automated scheduling, resume parsing</strong>,
+        and <strong>voice-based coding interviews</strong>.
+      </p>
+    </td>
+    <!-- Right Column: Image -->
+    <td style="vertical-align: top; text-align: right; width: 40%;">
+      <img src="https://media.giphy.com/media/3o85xB7xyoN4p4zGfK/giphy.gif" alt="HR Chatbot" style="width: 250px; border-radius: 8px;" />
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -17,13 +31,13 @@ Modern hiring processes are often:
 
 ### ✅ Our Solution
 
-A **fully automated agentic assistant** that:
+A **fully automated AI assistant** that:
 
 * Parses resumes and matches them intelligently with job requirements.
 * Scores candidates using LLMs + domain-specific evaluators.
 * Manages the entire hiring workflow: resume submission, coding rounds, interviews.
 * Schedules phases and sends emails automatically.
-* Conducts voice-based coding interviews.
+* Conducts voice-based and coding interviews.
 * Provides HR dashboards with real-time analytics.
 
 ---
@@ -89,8 +103,10 @@ A **fully automated agentic assistant** that:
 
 ### 💻 Frontend
 
-* **React.js** (SPA)
-* **Tailwind CSS** (Styling)
+* **React.js (Vite)** – SPA architecture and modern development experience  
+* **Tailwind CSS** – Utility-first styling for rapid UI development  
+* **Recharts** – Composable charting library for data visualization  
+* **Axios** – Promise-based HTTP client for API communication
 
 ---
 
