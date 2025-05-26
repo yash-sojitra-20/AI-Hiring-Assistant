@@ -5,6 +5,7 @@ import logging
 import asyncio
 from bson import ObjectId
 from app.candidate_selector import select_top_candidates
+from app.candidate_selector_for_hr import shortlist_candidates_for_hr
 from app.notification_service import send_coding_round_emails
 from db import job_user_collection
 
@@ -41,8 +42,26 @@ async def end_resume_collection(job_id: str):
 def start_coding_round(job_id):
     logging.info(f"[Job {job_id}] Coding round started.")
 
-def end_coding_round(job_id):
-    logging.info(f"[Job {job_id}] Coding round ended. Evaluating submissions...")
+async def end_coding_round(job_id: str):
+    try:
+        print(f"\n\nEnding coding round for job: {job_id}\n\n")
+        logger.info(f"Shortlisting candidates for HR for job: {job_id}")
+
+        # Call the shortlist_candidates_for_hr function
+        shortlisted_candidates = await shortlist_candidates_for_hr(job_id, 0.5)
+
+        if shortlisted_candidates:
+            logger.info(f"Shortlisted {len(shortlisted_candidates)} candidates for HR for job {job_id}")
+
+            # Send emails to shortlisted candidates
+            await send_coding_round_emails(job_id, shortlisted_candidates)
+
+            logger.info(f"Emails sent to shortlisted candidates for job {job_id}")
+        else:
+            logger.warning(f"No candidates shortlisted for HR for job {job_id}")
+
+    except Exception as e:
+        logger.error(f"Error shortlisting candidates for HR for job {job_id}: {e}")
 
 def start_interview_round(job_id):
     logging.info(f"[Job {job_id}] Interview round started.")

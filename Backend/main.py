@@ -5,6 +5,8 @@ from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from bson import ObjectId
 from datetime import datetime, timedelta
+
+from app.transcript_scorer import score_transcript
 from db import hr_collection, job_collection, user_collection, job_user_collection
 import io
 import json
@@ -30,6 +32,12 @@ app.add_middleware(
 )
 
 # ------------------ MODELS ------------------
+class TranscriptMessage(BaseModel):
+    role: str
+    content: str
+
+class TranscriptRequest(BaseModel):
+    transcript: List[TranscriptMessage]
 
 class HRModel(BaseModel):
     hr_username: str
@@ -143,10 +151,10 @@ async def create_job(job: JobModel):
         now = datetime.now()
         timings = {
             "resume_start": now + timedelta(minutes=0),
-            "resume_end": now + timedelta(minutes=5),
-            "coding_start": now + timedelta(minutes=6),
-            "coding_end": now + timedelta(minutes=7),
-            "interview_start": now + timedelta(minutes=8),
+            "resume_end": now + timedelta(minutes=2),
+            "coding_start": now + timedelta(minutes=3),
+            "coding_end": now + timedelta(minutes=8),
+            "interview_start": now + timedelta(minutes=9),
         }
         schedule_workflow(str(result.inserted_id), timings)
 
@@ -262,6 +270,52 @@ async def get_job_by_job_id_and_user_id(
     except Exception as e:
         logger.error(f"Error fetching job by Job ID and User ID: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch job")
+
+@app.post("/job/{job_id}/{user_id}/score")
+async def update_technical_score(
+        job_id: str = Path(..., description="The ID of the job"),
+        user_id: str = Path(..., description="The ID of the user"),
+        transcript_data: List[Dict[str, str]] = Body(..., description="The transcript data containing role and content")
+):
+    try:
+        # Validate the transcript structure
+        if not transcript_data or not all("role" in item and "content" in item for item in transcript_data):
+            raise HTTPException(status_code=400, detail="Invalid transcript format. Each item must have 'role' and 'content' keys.")
+
+        # Convert the transcript into a format suitable for scoring
+        sample_transcript = [
+            {"bot": item["content"]} if item["role"] == "assistant" else {"user": item["content"]}
+            for item in transcript_data
+        ]
+
+        # Call the score_transcript function
+        scoring_result = score_transcript(sample_transcript)
+        technical_score = scoring_result.get("score", 0)
+        feedback = scoring_result.get("feedback", [])
+
+        # Update the job_user_collection with the technical_score
+        result = await job_user_collection.update_one(
+            {"job_id": ObjectId(job_id), "user_id": ObjectId(user_id)},
+            {"$set": {"technical_score": technical_score, "updated_at": datetime.utcnow()}}
+        )
+
+        if result.modified_count == 0:
+            raise HTTPException(status_code=404, detail="Job-User record not found")
+
+        return {
+            "message": "Technical score updated successfully",
+            "job_id": job_id,
+            "user_id": user_id,
+            "technical_score": technical_score,
+            "feedback": feedback
+        }
+
+    except HTTPException as http_exc:
+        logger.error(f"HTTP error while updating technical score: {http_exc.detail}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error updating technical score: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update technical score")
 
 # ------------------ User Routes ------------------
 

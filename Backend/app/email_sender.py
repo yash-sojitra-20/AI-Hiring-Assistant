@@ -18,14 +18,18 @@ async def send_status_update_email(to_email: str):
     message = EmailMessage()
     message["From"] = SMTP_USER
     message["To"] = to_email
-    message["Subject"] = "Congratulations! You're Selected for Coding Round"
+    message["Subject"] = "Congratulations! You’ve Been Selected for the Next Round"
 
     content = """
     Dear Candidate,
 
-    Congratulations! Your resume has been shortlisted and you have been selected for the coding round.
-    
-    Please prepare for the upcoming coding assessment. Further details will be shared soon.
+    Congratulations!
+
+    We are pleased to inform you that you have been shortlisted for the next round of our selection process.
+
+    Further details regarding the next steps will be shared with you shortly. Please stay tuned and be prepared.
+
+    If you have any questions, feel free to reach out.
 
     Best regards,
     HR Team
