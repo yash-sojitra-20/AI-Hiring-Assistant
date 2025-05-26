@@ -1,76 +1,160 @@
 # 🤖 AI-Powered Hiring Assistant
 
-![AI Hiring Assistant Banner](assets/banner.gif)
+An end-to-end **AI-driven hiring automation platform** that solves real-world recruitment bottlenecks using **multimodal intelligence, automated scheduling, resume parsing**, and **voice-based coding interviews**.
 
-An intelligent, fully automated hiring platform that streamlines the recruitment process using AI-driven workflows, voice-based coding interviews, and real-time candidate evaluation.
+![Hiring Assistant Demo](assets/banner.gif)
+
+---
+
+## 🧩 Problem It Solves
+
+Modern hiring processes are often:
+
+* ⌛ Time-consuming for HR to screen hundreds of resumes manually.
+* ❌ Subject to bias or inconsistency in candidate evaluation.
+* 📅 Prone to scheduling conflicts.
+* 🔄 Inefficient in follow-ups and round management.
+
+### ✅ Our Solution
+
+A **fully automated agentic assistant** that:
+
+* Parses resumes and matches them intelligently with job requirements.
+* Scores candidates using LLMs + domain-specific evaluators.
+* Manages the entire hiring workflow: resume submission, coding rounds, interviews.
+* Schedules phases and sends emails automatically.
+* Conducts voice-based coding interviews.
+* Provides HR dashboards with real-time analytics.
 
 ---
 
 ## 🚀 Features
 
-* **🧑‍💼 Admin Panel**: Create job roles with specific timelines and requirements.
-* **👨‍💻 Candidate Portal**: Apply to job roles and participate in coding interviews.
-* **⏰ Automated Scheduling**: Utilizes `APScheduler` to manage the hiring workflow based on predefined timelines.
-* **📄 Resume Evaluation**: Parses and ranks resumes using AI models.
-* **🧠 Voice-Based Coding Interviews**: Conducts live coding interviews using voice inputs, transcribed and evaluated by ML models.
-* **📧 Automated Communication**: Sends emails to candidates at each stage of the hiring process.
-* **📊 Real-Time Insights**: Provides hiring managers with up-to-date analytics and candidate progress.
+### 👩‍💼 HR/Admin Panel
+
+* Create jobs with start/end times for all phases
+* Define job requirements, positions, skills, experience, etc.
+
+### 👨‍💻 Candidate Panel
+
+* Apply to job roles with resume upload
+* Receive emails for coding/interview rounds
+* Take voice-based coding assessments
+
+### 🔁 Full Workflow Automation
+
+* Managed via APScheduler
+* Automatic transition from resume to coding to interviews
+* Sends emails at each step to shortlisted candidates
+
+### 📄 Resume Evaluation
+
+* Extracts structured data using Google Gemini
+* Matches resumes with JD using:
+
+  * FuzzyWuzzy
+  * Sentence Transformers (semantic matching)
+  * Scikit-learn vectorization
+
+### 🧠 AI-Based Code & Voice Evaluation
+
+* Voice transcription + LLM scoring
+* Auto-generated coding feedback
+* Shortlists top X% based on custom scoring logic
+
+### 🖥️ Admin Dashboard
+
+* Monitor submissions
+* View scores
+* Track pipeline progress
 
 ---
 
-## 🖥️ Tech Stack
+## ⚙️ Tech Stack
 
-![Python](https://img.shields.io/badge/Python-3.9-blue.svg)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.70.0-green.svg)
-![APScheduler](https://img.shields.io/badge/APScheduler-3.7.0-orange.svg)
-![Vapi](https://img.shields.io/badge/Vapi-Voice_Processing-red.svg)
-![LLM](https://img.shields.io/badge/LLM-Model_Evaluation-purple.svg)
+### 🔧 Backend
+
+* **Python** 3.9+
+* **FastAPI** (API Framework)
+* **Uvicorn** (ASGI Server)
+* **Pydantic** (Data validation)
+* **Pymongo + BSON** (MongoDB integration)
+* **python-dotenv** (Secrets)
+* **APScheduler** (Workflow automation)
+* **aiosmtplib** (Email service)
+* **Google Generative AI (Gemini)** (Resume parsing, scoring)
+* **Scikit-learn** (Vector-based scoring)
+* **FuzzyWuzzy + Python-Levenshtein** (Fuzzy string matching)
+* **Sentence-Transformers** (Semantic matching)
+
+### 💻 Frontend
+
+* **React.js** (SPA)
+* **Tailwind CSS** (Styling)
 
 ---
 
-## 📈 Workflow Overview
+## 🔄 Hiring Workflow
 
-1. **Job Creation**: HR creates a job role with specific timelines.
-2. **Resume Collection**: Candidates submit resumes within the defined period.
-3. **Resume Evaluation**: AI models parse and rank resumes; top candidates are selected.
-4. **Coding Round**: Selected candidates participate in voice-based coding interviews.
-5. **Evaluation**: ML models assess coding responses and provide feedback.
-6. **Interview Round**: Top performers are invited for the final HR interview.
-7. **Hiring Decision**: Final selections are made, and offers are extended.
+```mermaid
+graph TD
+A[Job Created by HR] --> B[Resume Submission Open]
+B --> C[Resume Submission Close]
+C --> D[Resume Parsing + Scoring]
+D --> E[Top X% Candidates Shortlisted]
+E --> F[Coding Round Invite Sent]
+F --> G[Coding Round Evaluation]
+G --> H[Voice Interview Conducted]
+H --> I[Final Evaluation + Shortlist]
+I --> J[Interview Invite Sent]
+J --> K[HR Makes Offer]
+```
+
+---
+
+## 🧪 How the Automation Works
+
+The `scheduler.py` handles time-based events:
+
+* `resume_start` ➝ Log and open submissions
+* `resume_end` ➝ Parse resumes, compute scores, email top candidates
+* `coding_start` ➝ Notify candidates and accept submissions
+* `coding_end` ➝ Evaluate coding responses (LLM-based), rank them
+* `interview_start` ➝ Schedule voice-based interviews, email invites
+
+### 🔔 All events auto-triggered with `APScheduler` + MongoDB stored timings.
 
 ---
 
 ## 🛠️ Setup Instructions
 
-1. **Clone the Repository**
+```bash
+# 1. Clone the repo
+$ git clone https://github.com/your-username/ai-hiring-assistant.git
+$ cd ai-hiring-assistant
 
-   ```bash
-   git clone https://github.com/yourusername/ai-hiring-assistant.git
-   cd ai-hiring-assistant
-   ```
+# 2. Install Python dependencies
+$ python -m venv venv
+$ source venv/bin/activate
+$ pip install -r requirements.txt
 
+# 3. Set environment variables
+$ cp .env.example .env
+# Add keys for: MONGO_URI, GEMINI_API_KEY, SMTP credentials
 
+# 4. Run the backend
+$ uvicorn main:app --reload
 
-2. **Create a Virtual Environment**
+# 5. Run the frontend (React)
+$ cd frontend
+$ npm install && npm run dev
+```
 
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-
-
-3. **Install Dependencies**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-
-
-4. **Run the Application**
-
-   ```bash
-   uvicorn main:app --reload
-   ```
 ---
+
+## 🧠 Intelligence Modules
+
+* **Resume Scoring**: Hybrid of fuzzy, semantic, and rule-based scoring.
+* **LLM Evaluation**: Uses Gemini + prompt engineering to extract data and assign match score.
+* **MCP Integration**: Planned module for self-improving candidate scoring using continuous feedback.
+
